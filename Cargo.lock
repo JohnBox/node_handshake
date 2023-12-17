@@ -871,6 +871,7 @@ dependencies = [
  "bs58 0.5.0",
  "bytes",
  "ed25519-dalek",
+ "hex",
  "near-crypto",
  "near-network-primitives",
  "near-primitives",

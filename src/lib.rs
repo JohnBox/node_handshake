@@ -63,11 +63,10 @@ mod tests {
     use std::str::FromStr;
 
     use bytes::BytesMut;
-    use ed25519_dalek::{Keypair, SecretKey, Signature, Signer};
+    use ed25519_dalek::{Keypair, SecretKey, Signer};
     use near_primitives::block::GenesisId;
     use near_primitives::hash::CryptoHash;
     use protobuf::Message;
-    use sha256::digest;
     use tokio::io::AsyncReadExt;
 
     use rand::rngs::OsRng;
@@ -97,8 +96,7 @@ mod tests {
     async fn test_send_handshake() {
         let mut connection = connect_to_node().await.unwrap();
 
-        let mut csprng = OsRng::default();
-        let sender_signature_key = Keypair::generate(&mut csprng);
+        // let mut csprng = OsRng::default();
 
         let seed = [114, 239, 96, 44, 49, 125, 81, 74, 83, 216, 75, 240, 26, 154, 153, 166, 102, 159, 217, 42, 105, 118, 226, 193, 190, 134, 116, 77, 237, 10, 51, 37];
         let secret_key = SecretKey::from_bytes(&seed).unwrap();
@@ -108,7 +106,6 @@ mod tests {
         let sp_key = [secret_key.to_bytes(), public_key.to_bytes()].concat();
 
         let sender_signature_key = Keypair::from_bytes(&sp_key).unwrap();
-        // return;
 
         let sender_public_key_bytes = sender_signature_key.public.to_bytes();
         let sender_public_key = PublicKey::ED25519(ED25519PublicKey::from(
@@ -137,9 +134,14 @@ mod tests {
         }
         edge_info.push(1);
         edge_info.extend([0; 7]);
+
         println!("{:?}", edge_info);
-        let sha256_edge_info = digest(edge_info);
-        let sender_signature = sender_signature_key.sign(sha256_edge_info.as_bytes());
+        println!("{:?}", edge_info.len());
+        let sha256_edge_info = sha256::digest(edge_info);
+        println!("{:?}", sha256_edge_info);
+        let sha256_edge_info = hex::decode(sha256_edge_info).unwrap();
+        println!("{:?}", sha256_edge_info.len());
+        let sender_signature = sender_signature_key.sign(&sha256_edge_info);
 
         let genesis_hash = CryptoHash::from_str("GyGacsMkHfq1n1HQ3mHF4xXqAMTDR183FnckCaZ2r5yL").unwrap();
         let genesis_id = GenesisId {
