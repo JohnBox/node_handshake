@@ -25,3 +25,30 @@ impl TryFrom<proto::network::GenesisId> for GenesisId {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use anyhow::Result;
+    use near_primitives::block::GenesisId;
+    use near_primitives::borsh::BorshDeserialize;
+    use near_primitives::hash::CryptoHash;
+    use rand::rngs::OsRng;
+
+    use crate::proto::network;
+
+    #[test]
+    fn test_serde() -> Result<()> {
+        let genesis_id = GenesisId {
+            chain_id: "testnet".to_string(),
+            hash: CryptoHash::try_from_slice(
+                ed25519_dalek::SecretKey::generate(&mut OsRng).as_bytes()
+            )?,
+        };
+        let genesis_id_original = genesis_id.clone();
+        let network_genesis_id: network::GenesisId = genesis_id.into();
+        let genesis_id_restored: GenesisId = network_genesis_id.try_into().unwrap();
+        assert_eq!(genesis_id_original, genesis_id_restored);
+
+        Ok(())
+    }
+}

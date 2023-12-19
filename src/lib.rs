@@ -62,6 +62,7 @@ mod tests {
 
     use bytes::BytesMut;
     use ed25519_dalek::{Keypair, SecretKey, Signer};
+    use near_network_primitives::types::{PartialEdgeInfo, PeerChainInfoV2};
     use near_primitives::block::GenesisId;
     use near_primitives::hash::CryptoHash;
     use protobuf::Message;
@@ -146,13 +147,23 @@ mod tests {
             hash: genesis_hash,
         };
         println!("My genesis id {:?}", genesis_id);
-        let mut handshake = Handshake::default();
-        handshake.target_peer_id = target_peer_id;
-        handshake.sender_peer_id = sender_peer_id;
-        handshake.sender_chain_info.genesis_id = genesis_id;
-
-        handshake.partial_edge_info.signature = near_crypto::Signature::ED25519(sender_signature);
-
+        let handshake = Handshake {
+            protocol_version: 63,
+            oldest_supported_version: 42,
+            sender_peer_id,
+            target_peer_id,
+            sender_listen_port: None,
+            sender_chain_info: PeerChainInfoV2 {
+                genesis_id,
+                height: 0,
+                tracked_shards: vec![],
+                archival: false,
+            },
+            partial_edge_info: PartialEdgeInfo {
+                nonce: 1,
+                signature: near_crypto::Signature::ED25519(sender_signature),
+            },
+        };
         let peer_message = PeerMessage::Tier2Handshake(handshake);
         println!("{:#?}", peer_message);
 
@@ -161,12 +172,12 @@ mod tests {
         let message = network_peer_message.write_to_bytes().unwrap();
         let message_size = message.len();
 
-        let result = connection.write_u32_le(message_size as u32).await;
-        let result = connection.write_all(&message).await;
-        let result = connection.flush().await;
+        let _result = connection.write_u32_le(message_size as u32).await;
+        let _result = connection.write_all(&message).await;
+        let _result = connection.flush().await;
 
         let mut buf = BytesMut::with_capacity(8_196);
-        let result = connection.read_buf(&mut buf).await;
+        let _result = connection.read_buf(&mut buf).await;
         // let peer_message: proto::network::PeerMessage = proto::network::PeerMessage::try_from(buf).unwrap();
         // println!("{:?}", peer_message);
         // Ping

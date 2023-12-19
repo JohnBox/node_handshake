@@ -1,11 +1,9 @@
-use near_crypto::{KeyType, Signature};
-use near_network_primitives::time;
 use near_network_primitives::types::{PartialEdgeInfo, PeerChainInfoV2};
 use near_primitives::block::GenesisId;
 use near_primitives::borsh::BorshDeserialize;
+use near_primitives::hash::CryptoHash;
 use near_primitives::network::PeerId;
 use protobuf::MessageField;
-use protobuf::well_known_types::timestamp::Timestamp;
 
 use crate::proto;
 
@@ -27,51 +25,51 @@ pub struct Handshake {
     pub(crate) partial_edge_info: PartialEdgeInfo,
 }
 
-impl Default for Handshake {
-    fn default() -> Self {
-        let sender_peer_id = PeerId::random();
-        let target_peer_id = PeerId::random();
-        let genesis_hash = "GyGacsMkHfq1n1HQ3mHF4xXqAMTDR183FnckCaZ2r5yL"
-            .parse()
-            .unwrap();
-        let genesis_id = GenesisId {
-            chain_id: "localnet".to_string(),
-            hash: genesis_hash,
-        };
-        let sender_chain_info = PeerChainInfoV2 {
-            genesis_id,
-            height: 0,
-            tracked_shards: vec![],
-            archival: false,
-        };
-        let edge_signature = Signature::empty(KeyType::ED25519);
-        let partial_edge_info = PartialEdgeInfo {
-            nonce: 1,
-            signature: edge_signature,
-        };
-        let handshake = Handshake {
-            protocol_version: 63,
-            oldest_supported_version: 0,
-            sender_peer_id,
-            target_peer_id,
-            sender_listen_port: Some(12345),
-            sender_chain_info,
-            partial_edge_info,
-        };
-
-        handshake
-    }
-}
-
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub enum HandshakeFailureReason {
-    ProtocolVersionMismatch {
-        version: u32,
-        oldest_supported_version: u32,
-    },
-    GenesisMismatch(GenesisId),
-    InvalidTarget,
-}
+// impl Default for Handshake {
+//     fn default() -> Self {
+//         let sender_peer_id = PeerId::random();
+//         let target_peer_id = PeerId::random();
+//         let genesis_hash = "GyGacsMkHfq1n1HQ3mHF4xXqAMTDR183FnckCaZ2r5yL"
+//             .parse()
+//             .unwrap();
+//         let genesis_id = GenesisId {
+//             chain_id: "localnet".to_string(),
+//             hash: genesis_hash,
+//         };
+//         let sender_chain_info = PeerChainInfoV2 {
+//             genesis_id,
+//             height: 0,
+//             tracked_shards: vec![],
+//             archival: false,
+//         };
+//         let edge_signature = Signature::empty(KeyType::ED25519);
+//         let partial_edge_info = PartialEdgeInfo {
+//             nonce: 1,
+//             signature: edge_signature,
+//         };
+//         let handshake = Handshake {
+//             protocol_version: 63,
+//             oldest_supported_version: 0,
+//             sender_peer_id,
+//             target_peer_id,
+//             sender_listen_port: Some(12345),
+//             sender_chain_info,
+//             partial_edge_info,
+//         };
+//
+//         handshake
+//     }
+// }
+//
+// #[derive(PartialEq, Eq, Clone, Debug)]
+// pub enum HandshakeFailureReason {
+//     ProtocolVersionMismatch {
+//         version: u32,
+//         oldest_supported_version: u32,
+//     },
+//     GenesisMismatch(GenesisId),
+//     InvalidTarget,
+// }
 
 impl From<Handshake> for proto::network::Handshake {
     fn from(value: Handshake) -> Self {
@@ -80,7 +78,7 @@ impl From<Handshake> for proto::network::Handshake {
             oldest_supported_version: value.oldest_supported_version,
             sender_peer_id: MessageField::some(value.sender_peer_id.into()),
             target_peer_id: MessageField::some(value.target_peer_id.into()),
-            sender_listen_port: value.sender_listen_port.map_or(0, |port| port as u32),
+            sender_listen_port: value.sender_listen_port.map_or(0, u32::from),
             sender_chain_info: MessageField::some(value.sender_chain_info.into()),
             partial_edge_info: MessageField::some(value.partial_edge_info.into()),
             owned_account: MessageField::none(),
@@ -93,8 +91,6 @@ impl TryFrom<proto::network::Handshake> for Handshake {
     type Error = Box<dyn std::error::Error + Send + Sync>;
 
     fn try_from(value: proto::network::Handshake) -> Result<Self, Self::Error> {
-        let sender_chain_info = PeerChainInfoV2::default();
-        let partial_edge_info = PartialEdgeInfo::default();
         Ok(Self {
             protocol_version: value.protocol_version,
             oldest_supported_version: value.oldest_supported_version,
@@ -107,21 +103,78 @@ impl TryFrom<proto::network::Handshake> for Handshake {
                     Some(port)
                 }
             })?,
-            sender_chain_info,
-            partial_edge_info,
+            sender_chain_info: PeerChainInfoV2 {
+                genesis_id: GenesisId {
+                    chain_id: value.sender_chain_info.genesis_id.chain_id.clone(),
+                    hash: CryptoHash::try_from_slice(
+                        value.sender_chain_info.genesis_id.hash.hash.as_slice()
+                    )?,
+                },
+                height: value.sender_chain_info.height,
+                tracked_shards: value.sender_chain_info.tracked_shards.clone(),
+                archival: value.sender_chain_info.archival,
+            },
+            partial_edge_info: PartialEdgeInfo::try_from_slice(value.partial_edge_info.borsh.as_slice())?,
         })
     }
 }
 
-pub fn utc_to_proto(x: &time::Utc) -> Timestamp {
-    Timestamp {
-        seconds: x.unix_timestamp(),
-        // x.nanosecond() is guaranteed to be in range [0,10^9).
-        nanos: x.nanosecond() as i32,
-        ..Default::default()
+#[cfg(test)]
+mod tests {
+    use anyhow::Result;
+    use near_crypto::{ED25519PublicKey, ED25519SecretKey, PublicKey, SecretKey};
+    use near_network_primitives::types::{PartialEdgeInfo, PeerChainInfoV2};
+    use near_primitives::block::GenesisId;
+    use near_primitives::borsh::BorshDeserialize;
+    use near_primitives::hash::CryptoHash;
+    use near_primitives::network::PeerId;
+    use rand::rngs::OsRng;
+
+    use crate::proto::network;
+    use crate::types::handshake::Handshake;
+
+    #[test]
+    fn test_serde() -> Result<()> {
+        let genesis_id = GenesisId {
+            chain_id: "testnet".to_string(),
+            hash: CryptoHash::try_from_slice(
+                ed25519_dalek::SecretKey::generate(&mut OsRng).as_bytes()
+            )?,
+        };
+        let sender_chain_info = PeerChainInfoV2 {
+            genesis_id,
+            height: 0,
+            tracked_shards: vec![],
+            archival: false,
+        };
+        let keypair = ed25519_dalek::Keypair::generate(&mut OsRng);
+        let sender_peer_id = PeerId::new(PublicKey::ED25519(ED25519PublicKey(
+            keypair.public.to_bytes()
+        ))
+        );
+        let target_peer_id = PeerId::new(PublicKey::ED25519(ED25519PublicKey(
+            ed25519_dalek::Keypair::generate(&mut OsRng).public.to_bytes())
+        ));
+        let secret_key = SecretKey::ED25519(ED25519SecretKey(keypair.to_bytes()));
+        let partial_edge_info = PartialEdgeInfo::new(
+            &sender_peer_id, &target_peer_id, 1, &secret_key,
+        );
+        let handshake = Handshake {
+            protocol_version: 63,
+            oldest_supported_version: 61,
+            sender_peer_id,
+            target_peer_id,
+            sender_listen_port: Some(51200),
+            sender_chain_info,
+            partial_edge_info,
+        };
+
+
+        let handshake_original = handshake.clone();
+        let network_handshake: network::Handshake = handshake.into();
+        let handshake_restored: Handshake = network_handshake.try_into().unwrap();
+        assert_eq!(handshake_original, handshake_restored);
+
+        Ok(())
     }
 }
-
-// pub fn utc_from_proto(x: &Timestamp) -> Result<time::Utc, ParseTimestampError> {
-//     time::Utc::from_unix_timestamp_nanos((x.seconds as i128 * 1_000_000_000) + (x.nanos as i128))
-// }

@@ -27,3 +27,6 @@ protobuf = "3.3.0"
 
 [build-dependencies]
 protobuf-codegen = "3.3.0"
+
+[dev-dependencies]
+anyhow = "1.0.75"
