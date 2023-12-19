@@ -1,17 +1,13 @@
-use near_crypto::{KeyType, PublicKey, Signature};
+use near_crypto::{KeyType, Signature};
+use near_network_primitives::time;
 use near_network_primitives::types::{PartialEdgeInfo, PeerChainInfoV2};
 use near_primitives::block::GenesisId;
-use near_primitives::borsh::BorshSerialize;
-use near_primitives::hash::CryptoHash;
+use near_primitives::borsh::BorshDeserialize;
 use near_primitives::network::PeerId;
 use protobuf::MessageField;
-use crate::proto;
+use protobuf::well_known_types::timestamp::Timestamp;
 
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub enum PeerMessage {
-    Tier1Handshake(Handshake),
-    Tier2Handshake(Handshake),
-}
+use crate::proto;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Handshake {
@@ -31,97 +27,13 @@ pub struct Handshake {
     pub(crate) partial_edge_info: PartialEdgeInfo,
 }
 
-impl From<PublicKey> for proto::network::PublicKey {
-    fn from(value: PublicKey) -> Self {
-        proto::network::PublicKey {
-            borsh: value.try_to_vec().unwrap(),
-            ..Default::default()
-        }
-    }
-}
-
-impl From<PeerId> for proto::network::PublicKey {
-    fn from(value: PeerId) -> Self {
-        value.public_key().clone().into()
-    }
-}
-
-
-impl From<CryptoHash> for proto::network::CryptoHash {
-    fn from(value: CryptoHash) -> Self {
-        proto::network::CryptoHash {
-            hash: value.0.into(),
-            ..Default::default()
-        }
-    }
-}
-
-impl From<GenesisId> for proto::network::GenesisId {
-    fn from(value: GenesisId) -> Self {
-        proto::network::GenesisId {
-            chain_id: value.chain_id,
-            hash: MessageField::some(value.hash.into()),
-            ..Default::default()
-        }
-    }
-}
-
-impl From<PeerChainInfoV2> for proto::network::PeerChainInfo {
-    fn from(value: PeerChainInfoV2) -> Self {
-        proto::network::PeerChainInfo {
-            genesis_id: MessageField::some(value.genesis_id.into()),
-            height: value.height,
-            tracked_shards: value.tracked_shards,
-            archival: value.archival,
-            ..Default::default()
-        }
-    }
-}
-
-impl From<PartialEdgeInfo> for proto::network::PartialEdgeInfo {
-    fn from(value: PartialEdgeInfo) -> Self {
-        proto::network::PartialEdgeInfo {
-            borsh: value.try_to_vec().unwrap(),
-            ..Default::default()
-        }
-    }
-}
-
-impl From<Handshake> for proto::network::Handshake {
-    fn from(value: Handshake) -> Self {
-        proto::network::Handshake {
-            protocol_version: value.protocol_version,
-            oldest_supported_version: value.oldest_supported_version,
-            sender_peer_id: MessageField::some(value.sender_peer_id.into()),
-            target_peer_id: MessageField::some(value.target_peer_id.into()),
-            sender_listen_port: value.sender_listen_port.map_or(0,|port| port as u32),
-            sender_chain_info: MessageField::some(value.sender_chain_info.into()),
-            partial_edge_info: MessageField::some(value.partial_edge_info.into()),
-            owned_account: MessageField::none(),
-            ..Default::default()
-        }
-    }
-}
-
-impl From<PeerMessage> for proto::network::PeerMessage {
-    fn from(value: PeerMessage) -> Self {
-        proto::network::PeerMessage {
-            message_type: Some(match value {
-                PeerMessage::Tier1Handshake(handshake) =>
-                    proto::network::peer_message::Message_type::Tier1Handshake(handshake.into()),
-                PeerMessage::Tier2Handshake(handshake) =>
-                    proto::network::peer_message::Message_type::Tier2Handshake(handshake.into()),
-            }),
-            ..Default::default()
-        }
-    }
-}
-
 impl Default for Handshake {
     fn default() -> Self {
         let sender_peer_id = PeerId::random();
         let target_peer_id = PeerId::random();
-        let genesis_hash = "GyGacsMkHfq1n1HQ3mHF4xXqAMTDR183FnckCaZ2r5yL".parse().unwrap();
+        let genesis_hash = "GyGacsMkHfq1n1HQ3mHF4xXqAMTDR183FnckCaZ2r5yL"
+            .parse()
+            .unwrap();
         let genesis_id = GenesisId {
             chain_id: "localnet".to_string(),
             hash: genesis_hash,
@@ -147,57 +59,69 @@ impl Default for Handshake {
             partial_edge_info,
         };
 
-
         handshake
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::str::FromStr;
-    use near_crypto::{KeyType, Signature};
-    use near_network_primitives::types::{PartialEdgeInfo, PeerChainInfoV2};
-    use near_primitives::block::GenesisId;
-    use near_primitives::hash::CryptoHash;
-    use near_primitives::network::PeerId;
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub enum HandshakeFailureReason {
+    ProtocolVersionMismatch {
+        version: u32,
+        oldest_supported_version: u32,
+    },
+    GenesisMismatch(GenesisId),
+    InvalidTarget,
+}
 
-    use crate::types::handshake::Handshake;
-
-    #[test]
-    fn test_handshake() {
-        let sender_peer_id = PeerId::random();
-        let target_peer_id = PeerId::random();
-        let genesis_hash = CryptoHash::from_str("GyGacsMkHfq1n1HQ3mHF4xXqAMTDR183FnckCaZ2r5yL").unwrap();
-        let genesis_id = GenesisId {
-            chain_id: "localnet".to_string(),
-            hash: genesis_hash,
-        };
-        println!("My genesis id {:?}", genesis_id);
-        let sender_chain_info = PeerChainInfoV2 {
-            genesis_id,
-            height: 0,
-            tracked_shards: vec![],
-            archival: false,
-        };
-        let edge_signature = Signature::empty(KeyType::ED25519);
-        let partial_edge_info = PartialEdgeInfo {
-            nonce: 0,
-            signature: edge_signature,
-        };
-        let handshake = Handshake {
-            protocol_version: 63,
-            oldest_supported_version: 63,
-            sender_peer_id,
-            target_peer_id,
-            sender_listen_port: None,
-            sender_chain_info,
-            partial_edge_info,
-        };
-
-        println!("{:#?}", handshake);
-
-        let network_handshake: crate::proto::network::Handshake = handshake.into();
-
-        println!("{:#?}", network_handshake);
+impl From<Handshake> for proto::network::Handshake {
+    fn from(value: Handshake) -> Self {
+        proto::network::Handshake {
+            protocol_version: value.protocol_version,
+            oldest_supported_version: value.oldest_supported_version,
+            sender_peer_id: MessageField::some(value.sender_peer_id.into()),
+            target_peer_id: MessageField::some(value.target_peer_id.into()),
+            sender_listen_port: value.sender_listen_port.map_or(0, |port| port as u32),
+            sender_chain_info: MessageField::some(value.sender_chain_info.into()),
+            partial_edge_info: MessageField::some(value.partial_edge_info.into()),
+            owned_account: MessageField::none(),
+            ..Default::default()
+        }
     }
 }
+
+impl TryFrom<proto::network::Handshake> for Handshake {
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+
+    fn try_from(value: proto::network::Handshake) -> Result<Self, Self::Error> {
+        let sender_chain_info = PeerChainInfoV2::default();
+        let partial_edge_info = PartialEdgeInfo::default();
+        Ok(Self {
+            protocol_version: value.protocol_version,
+            oldest_supported_version: value.oldest_supported_version,
+            sender_peer_id: PeerId::try_from_slice(value.sender_peer_id.borsh.as_slice())?,
+            target_peer_id: PeerId::try_from_slice(value.target_peer_id.borsh.as_slice())?,
+            sender_listen_port: u16::try_from(value.sender_listen_port).map(|port| {
+                if port == 0 {
+                    None
+                } else {
+                    Some(port)
+                }
+            })?,
+            sender_chain_info,
+            partial_edge_info,
+        })
+    }
+}
+
+pub fn utc_to_proto(x: &time::Utc) -> Timestamp {
+    Timestamp {
+        seconds: x.unix_timestamp(),
+        // x.nanosecond() is guaranteed to be in range [0,10^9).
+        nanos: x.nanosecond() as i32,
+        ..Default::default()
+    }
+}
+
+// pub fn utc_from_proto(x: &Timestamp) -> Result<time::Utc, ParseTimestampError> {
+//     time::Utc::from_unix_timestamp_nanos((x.seconds as i128 * 1_000_000_000) + (x.nanos as i128))
+// }

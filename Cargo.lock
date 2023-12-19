@@ -867,6 +867,7 @@ dependencies = [
 name = "node_handshake"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "borsh 1.2.1",
  "bs58 0.5.0",
  "bytes",

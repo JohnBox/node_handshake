@@ -17,6 +17,7 @@ bs58 = "0.5.0"
 
 borsh = "1.2.1"
 thiserror = "1.0.50"
+anyhow = "1.0.75"
 
 near-crypto = "0.15.0"
 near-primitives = "0.15.0"
