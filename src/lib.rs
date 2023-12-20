@@ -102,8 +102,6 @@ mod tests {
         ];
         let secret_key = SecretKey::from_bytes(&seed).unwrap();
         let public_key: ed25519_dalek::PublicKey = (&secret_key).into();
-        println!("{:?}", secret_key.as_bytes());
-        println!("{:?}", public_key.as_bytes());
         let sp_key = [secret_key.to_bytes(), public_key.to_bytes()].concat();
 
         let sender_signature_key = Keypair::from_bytes(&sp_key).unwrap();
@@ -132,12 +130,8 @@ mod tests {
         edge_info.push(1);
         edge_info.extend([0; 7]);
 
-        println!("{:?}", edge_info);
-        println!("{:?}", edge_info.len());
         let sha256_edge_info = sha256::digest(edge_info);
-        println!("{:?}", sha256_edge_info);
         let sha256_edge_info = hex::decode(sha256_edge_info).unwrap();
-        println!("{:?}", sha256_edge_info.len());
         let sender_signature = sender_signature_key.sign(&sha256_edge_info);
 
         let genesis_hash =
@@ -146,13 +140,12 @@ mod tests {
             chain_id: "localnet".to_string(),
             hash: genesis_hash,
         };
-        println!("My genesis id {:?}", genesis_id);
         let handshake = Handshake {
             protocol_version: 63,
             oldest_supported_version: 42,
-            sender_peer_id,
-            target_peer_id,
-            sender_listen_port: None,
+            sender_peer_id: sender_peer_id.clone(),
+            target_peer_id: target_peer_id.clone(),
+            sender_listen_port: Some(12345),
             sender_chain_info: PeerChainInfoV2 {
                 genesis_id,
                 height: 0,
@@ -165,7 +158,6 @@ mod tests {
             },
         };
         let peer_message = PeerMessage::Tier2Handshake(handshake);
-        println!("{:#?}", peer_message);
 
         let network_peer_message: proto::network::PeerMessage = peer_message.into();
 
@@ -177,9 +169,24 @@ mod tests {
         let _result = connection.flush().await;
 
         let mut buf = BytesMut::with_capacity(8_196);
-        let _result = connection.read_buf(&mut buf).await;
-        // let peer_message: proto::network::PeerMessage = proto::network::PeerMessage::try_from(buf).unwrap();
-        // println!("{:?}", peer_message);
+        println!("{:X}", buf);
+        let message_len = connection.read_u32_le().await.unwrap();
+        println!("MESSAGE LENGTH = {message_len}");
+        connection.read_buf(&mut buf).await.unwrap();
+        let message = proto::network::PeerMessage::parse_from_bytes(
+            &buf[..message_len as usize]
+        ).unwrap();
+
+        println!("NETWORK PEER MESSAGE {:?}", message);
+
+        let peer_message: Result<PeerMessage, _> = message.try_into();
+
+        if peer_message.is_err() {
+            println!("ERROR {:?}", peer_message.unwrap_err());
+        } else {
+            println!("PEER MESSAGE {:#?}", peer_message.unwrap());
+        }
+
         // Ping
 
         // let routed_message_body = RoutedMessageBody::Ping(Ping {
@@ -197,7 +204,7 @@ mod tests {
         //     ED25519SecretKey(sender_signature_key.to_bytes())
         // );
         // let routed_message = raw_routed_message.sign(
-        //     &secret_key, 2, Some(time::Utc::now_utc()),
+        //     &secret_key, 3, Some(time::Utc::now_utc()),
         // );
         //
         // let ping = PeerMessage::Routed(Box::new(routed_message));
@@ -216,5 +223,12 @@ mod tests {
         // println!("{:?}", result);
         // let result = connection.flush().await;
         // println!("{:?}", result);
+        //
+        // let mut buf = BytesMut::with_capacity(8_196);
+        // let received = connection.read_buf(&mut buf).await.unwrap();
+        // println!("{}", received);
+        // let message = proto::network::PeerMessage::parse_from_bytes(&buf[..received]).unwrap();
+        //
+        // println!("{:?}", message);
     }
 }

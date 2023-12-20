@@ -1,43 +1,57 @@
 use near_network_primitives::time;
 use near_network_primitives::time::Utc;
-use near_network_primitives::types::{RoutedMessage, RoutedMessageV2};
+use near_network_primitives::types::{Edge, PartialEdgeInfo, PeerInfo, RoutedMessage, RoutedMessageV2};
+use near_primitives::block::{Block, GenesisId};
+use near_primitives::block_header::BlockHeader;
 use near_primitives::borsh::{BorshDeserialize, BorshSerialize};
+use near_primitives::challenge::Challenge;
+use near_primitives::hash::CryptoHash;
+use near_primitives::transaction::SignedTransaction;
 use protobuf::MessageField;
 use protobuf::well_known_types::timestamp::Timestamp;
 
 use crate::proto;
 use crate::proto::network::peer_message::Message_type;
+use crate::proto::network::{Disconnect, DistanceVector, PeersRequest, PeersResponse, RoutingTableUpdate, SyncAccountsData};
 use crate::types::handshake::Handshake;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
+pub enum HandshakeFailureReason {
+    ProtocolVersionMismatch { version: u32, oldest_supported_version: u32 },
+    GenesisMismatch(GenesisId),
+    InvalidTarget,
+}
+
+#[derive(PartialEq, Clone, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum PeerMessage {
     Tier1Handshake(Handshake),
     Tier2Handshake(Handshake),
-    HandshakeFailure,
+    HandshakeFailure(PeerInfo, HandshakeFailureReason),
     /// When a failed nonce is used by some peer, this message is sent back as evidence.
-    LastEdge,
+    LastEdge(Edge),
     /// Contains accounts and edge information.
-    SyncRoutingTable,
-    DistanceVector,
-    RequestUpdateNonce,
+    SyncRoutingTable(RoutingTableUpdate),
+    DistanceVector(DistanceVector),
+    RequestUpdateNonce(PartialEdgeInfo),
 
-    SyncAccountsData,
+    SyncAccountsData(SyncAccountsData),
 
-    PeersRequest,
-    PeersResponse,
+    PeersRequest(PeersRequest),
+    PeersResponse(PeersResponse),
 
-    BlockHeadersRequest,
-    BlockHeaders,
+    BlockHeadersRequest(Vec<CryptoHash>),
+    BlockHeaders(Vec<BlockHeader>),
 
-    BlockRequest,
-    Block,
+    BlockRequest(CryptoHash),
+    Block(Block),
 
-    Transaction,
+    Transaction(SignedTransaction),
     Routed(Box<RoutedMessageV2>),
 
     /// Gracefully disconnect from other peer.
-    Disconnect,
-    Challenge,
+    Disconnect(Disconnect),
+    Challenge(Challenge),
 }
 
 impl From<PeerMessage> for proto::network::PeerMessage {
