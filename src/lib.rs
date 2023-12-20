@@ -6,12 +6,6 @@ use tokio::net::TcpStream;
 mod proto;
 mod types;
 
-async fn sender_public_key() -> [u8; 32] {
-    // let mut csprng = rand_core::OsRng::default();
-    // let key_pair = SigningKey::generate(&mut csprng);
-    // key_pair.verifying_key().to_bytes()
-    [0; 32]
-}
 
 async fn target_public_key() -> [u8; 32] {
     const EC25519_PREFIX: &str = "ed25519:";
@@ -22,39 +16,10 @@ async fn target_public_key() -> [u8; 32] {
     buffer
 }
 
-// async fn generate_handshake() -> Handshake {
-//     let sender_public_key = PublicKey::ED25519(ED25519PublicKey::from(sender_public_key().await));
-//     let target_public_key = PublicKey::ED25519(ED25519PublicKey::from(target_public_key().await));
-//     let sender_peer_id = PeerId::new(sender_public_key);
-//     let target_peer_id = PeerId::new(target_public_key);
-//     let sender_chain_info = PeerChainInfoV2 {
-//         genesis_id: Default::default(),
-//         height: 0,
-//         tracked_shards: vec![],
-//         archival: false,
-//     };
-//     let partial_edge_info = PartialEdgeInfo { nonce: 1, signature: Default::default() };
-//     let handshake = Handshake {
-//         protocol_version: 63,
-//         oldest_supported_version: 63,
-//         sender_peer_id,
-//         target_peer_id,
-//         sender_listen_port: None,
-//         sender_chain_info,
-//         partial_edge_info,
-//     };
-//     handshake
-// }
-
 async fn connect_to_node() -> std::io::Result<TcpStream> {
     TcpStream::connect("127.0.0.1:24567").await
 }
 
-#[allow(dead_code)]
-async fn send_handshake() {
-    let _connection = connect_to_node().await.unwrap();
-    // let handshake = generate_handshake().await;
-}
 
 #[cfg(test)]
 mod tests {
@@ -62,7 +27,9 @@ mod tests {
 
     use bytes::BytesMut;
     use ed25519_dalek::{Keypair, SecretKey, Signer};
-    use near_network_primitives::types::{PartialEdgeInfo, PeerChainInfoV2};
+    use near_crypto::ED25519SecretKey;
+    use near_network_primitives::time;
+    use near_network_primitives::types::{AccountOrPeerIdOrHash, PartialEdgeInfo, PeerChainInfoV2, Ping, RawRoutedMessage, RoutedMessageBody};
     use near_primitives::block::GenesisId;
     use near_primitives::hash::CryptoHash;
     use protobuf::Message;
@@ -73,24 +40,6 @@ mod tests {
 
     use super::*;
 
-    #[tokio::test]
-    async fn test_connect_to_node() {
-        assert!(connect_to_node().await.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_create_public_key_for_node() {
-        let public_key = sender_public_key().await;
-        assert_eq!(public_key.len(), 32);
-    }
-
-    #[tokio::test]
-    async fn test_decode_target_public_key() {
-        let target_public_key = target_public_key().await;
-        assert_eq!(target_public_key.len(), 32);
-    }
-
-    #[tokio::test]
     async fn test_send_handshake() {
         let mut connection = connect_to_node().await.unwrap();
 
@@ -189,46 +138,65 @@ mod tests {
 
         // Ping
 
-        // let routed_message_body = RoutedMessageBody::Ping(Ping {
-        //     nonce: 1,
-        //     source: sender_peer_id.clone(),
-        // });
-        //
-        //
-        // let raw_routed_message = RawRoutedMessage {
-        //     target: AccountOrPeerIdOrHash::PeerId(target_peer_id.clone()),
-        //     body: routed_message_body.clone(),
-        // };
-        //
-        // let secret_key: near_crypto::SecretKey = near_crypto::SecretKey::ED25519(
-        //     ED25519SecretKey(sender_signature_key.to_bytes())
-        // );
-        // let routed_message = raw_routed_message.sign(
-        //     &secret_key, 3, Some(time::Utc::now_utc()),
-        // );
-        //
-        // let ping = PeerMessage::Routed(Box::new(routed_message));
-        // println!("{:#?}", ping);
-        //
-        // let network_ping: proto::network::PeerMessage = ping.into();
-        //
-        // println!("{:?}", network_ping);
-        //
-        // let message = network_ping.write_to_bytes().unwrap();
-        // let message_size = message.len();
-        //
-        // let result = connection.write_u32_le(message_size as u32).await;
-        // println!("{:?}", result);
-        // let result = connection.write_all(&message).await;
-        // println!("{:?}", result);
-        // let result = connection.flush().await;
-        // println!("{:?}", result);
-        //
-        // let mut buf = BytesMut::with_capacity(8_196);
-        // let received = connection.read_buf(&mut buf).await.unwrap();
-        // println!("{}", received);
-        // let message = proto::network::PeerMessage::parse_from_bytes(&buf[..received]).unwrap();
-        //
-        // println!("{:?}", message);
+        let routed_message_body = RoutedMessageBody::Ping(Ping {
+            nonce: 3,
+            source: sender_peer_id.clone(),
+        });
+
+
+        let raw_routed_message = RawRoutedMessage {
+            target: AccountOrPeerIdOrHash::PeerId(target_peer_id.clone()),
+            body: routed_message_body.clone(),
+        };
+
+        let secret_key: near_crypto::SecretKey = near_crypto::SecretKey::ED25519(
+            ED25519SecretKey(sender_signature_key.to_bytes())
+        );
+        let routed_message = raw_routed_message.sign(
+            &secret_key, 3, Some(time::Utc::now_utc()),
+        );
+
+        let ping = PeerMessage::Routed(Box::new(routed_message));
+        println!("{:#?}", ping);
+
+        let network_ping: proto::network::PeerMessage = ping.into();
+
+        println!("{:?}", network_ping);
+
+        let message = network_ping.write_to_bytes().unwrap();
+        let message_size = message.len();
+
+        let result = connection.write_u32_le(message_size as u32).await;
+        println!("{:?}", result);
+        let result = connection.write_all(&message).await;
+        println!("{:?}", result);
+        let result = connection.flush().await;
+        println!("{:?}", result);
+        let mut retries = 0;
+        loop {
+            let mut buf = BytesMut::with_capacity(8_196);
+            println!("{:X}", buf);
+            let message_len = connection.read_u32_le().await.unwrap();
+            println!("MESSAGE LENGTH = {message_len}");
+            connection.read_buf(&mut buf).await.unwrap();
+            let message = proto::network::PeerMessage::parse_from_bytes(
+                &buf[..message_len as usize]
+            ).unwrap();
+
+            println!("NETWORK PEER MESSAGE {:?}", message);
+
+            let peer_message: Result<PeerMessage, _> = message.try_into();
+
+            if peer_message.is_err() {
+                println!("ERROR {:?}", peer_message.unwrap_err());
+                retries += 1;
+            } else {
+                println!("PEER MESSAGE {:#?}", peer_message.unwrap());
+            }
+
+            if retries > 1 {
+                break;
+            }
+        }
     }
 }
