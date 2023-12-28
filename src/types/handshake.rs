@@ -25,52 +25,6 @@ pub struct Handshake {
     pub(crate) partial_edge_info: PartialEdgeInfo,
 }
 
-// impl Default for Handshake {
-//     fn default() -> Self {
-//         let sender_peer_id = PeerId::random();
-//         let target_peer_id = PeerId::random();
-//         let genesis_hash = "GyGacsMkHfq1n1HQ3mHF4xXqAMTDR183FnckCaZ2r5yL"
-//             .parse()
-//             .unwrap();
-//         let genesis_id = GenesisId {
-//             chain_id: "localnet".to_string(),
-//             hash: genesis_hash,
-//         };
-//         let sender_chain_info = PeerChainInfoV2 {
-//             genesis_id,
-//             height: 0,
-//             tracked_shards: vec![],
-//             archival: false,
-//         };
-//         let edge_signature = Signature::empty(KeyType::ED25519);
-//         let partial_edge_info = PartialEdgeInfo {
-//             nonce: 1,
-//             signature: edge_signature,
-//         };
-//         let handshake = Handshake {
-//             protocol_version: 63,
-//             oldest_supported_version: 0,
-//             sender_peer_id,
-//             target_peer_id,
-//             sender_listen_port: Some(12345),
-//             sender_chain_info,
-//             partial_edge_info,
-//         };
-//
-//         handshake
-//     }
-// }
-//
-// #[derive(PartialEq, Eq, Clone, Debug)]
-// pub enum HandshakeFailureReason {
-//     ProtocolVersionMismatch {
-//         version: u32,
-//         oldest_supported_version: u32,
-//     },
-//     GenesisMismatch(GenesisId),
-//     InvalidTarget,
-// }
-
 impl From<Handshake> for proto::network::Handshake {
     fn from(value: Handshake) -> Self {
         proto::network::Handshake {
