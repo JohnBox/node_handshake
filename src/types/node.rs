@@ -8,27 +8,26 @@ use near_primitives::block::GenesisId;
 use near_primitives::hash::CryptoHash;
 use near_primitives::network::PeerId;
 use rand::rngs::OsRng;
-use crate::config::Config;
 
+use crate::config::Config;
 use crate::types::handshake::Handshake;
 
 #[derive(Debug)]
 pub struct Node {
     key_pair: Keypair,
-    target_peer_info: PeerInfo,
     protocol_version: u32,
     oldest_supported_version: u32,
-    sender_listen_port: Option<u16>,
+    sender_listen_port: u16,
 }
+
 
 impl From<Config> for Node {
     fn from(value: Config) -> Self {
         Self {
             key_pair: Keypair::generate(&mut OsRng),
-            target_peer_info: value.target_peer_info,
             protocol_version: value.protocol_version,
             oldest_supported_version: value.oldest_supported_version,
-            sender_listen_port: value.sender_listen_port.into(),
+            sender_listen_port: value.sender_listen_port,
         }
     }
 }
@@ -40,17 +39,17 @@ impl AsRef<Keypair> for Node {
 }
 
 impl Node {
-    fn peer_id(&self) -> PeerId {
+    pub fn peer_id(&self) -> PeerId {
         PeerId::new(PublicKey::ED25519(ED25519PublicKey(self.as_ref().public.to_bytes())))
     }
 
-    fn secret_key(&self) -> SecretKey {
+    pub fn secret_key(&self) -> SecretKey {
         SecretKey::ED25519(ED25519SecretKey(self.as_ref().to_bytes()))
     }
-    pub fn create_handshake(&self) -> Handshake {
+    pub fn create_handshake(&self, target_peer_info: PeerInfo) -> Handshake {
         let sender_peer_id = self.peer_id();
         let sender_secret_key = self.secret_key();
-        let target_peer_id = self.target_peer_info.id.clone();
+        let target_peer_id = target_peer_info.id.clone();
         let genesis_hash: CryptoHash =
             CryptoHash::from_str("GyGacsMkHfq1n1HQ3mHF4xXqAMTDR183FnckCaZ2r5yL").unwrap();
         let genesis_id: GenesisId = GenesisId {
@@ -63,7 +62,7 @@ impl Node {
             oldest_supported_version: self.oldest_supported_version,
             sender_peer_id: sender_peer_id.clone(),
             target_peer_id: target_peer_id.clone(),
-            sender_listen_port: self.sender_listen_port,
+            sender_listen_port: self.sender_listen_port.into(),
             sender_chain_info: PeerChainInfoV2 {
                 genesis_id,
                 height: 0,
@@ -79,14 +78,14 @@ impl Node {
         }
     }
 
-    pub fn create_ping(&self) -> RoutedMessageV2 {
+    pub fn create_ping(&self, target_peer_info: PeerInfo) -> RoutedMessageV2 {
         let routed_message_body = RoutedMessageBody::Ping(Ping {
             nonce: 3,
             source: self.peer_id(),
         });
 
         let raw_routed_message = RawRoutedMessage {
-            target: AccountOrPeerIdOrHash::PeerId(self.target_peer_info.id.clone()),
+            target: AccountOrPeerIdOrHash::PeerId(target_peer_info.id.clone()),
             body: routed_message_body,
         };
 
@@ -102,6 +101,7 @@ impl Node {
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
+    use ed25519_dalek::Keypair;
     use near_crypto::{ED25519PublicKey, ED25519SecretKey, PublicKey, SecretKey};
     use near_network_primitives::types::{PartialEdgeInfo, PeerChainInfoV2};
     use near_primitives::block::GenesisId;
@@ -129,8 +129,17 @@ mod tests {
             archival: false,
         };
 
-
-        let (target_node, sender_node) = (Node::default(), Node::default());
+        let (target_node, sender_node) = (Node {
+            key_pair: Keypair::generate(&mut OsRng),
+            protocol_version: 0,
+            oldest_supported_version: 0,
+            sender_listen_port: 0,
+        }, Node {
+            key_pair: Keypair::generate(&mut OsRng),
+            protocol_version: 0,
+            oldest_supported_version: 0,
+            sender_listen_port: 0,
+        });
 
         let partial_edge_info = PartialEdgeInfo::new(
             &PeerId::new(PublicKey::ED25519(ED25519PublicKey(sender_node.as_ref().public.to_bytes()))),

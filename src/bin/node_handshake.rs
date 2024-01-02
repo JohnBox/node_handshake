@@ -13,9 +13,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let connection = TcpStream::connect(config.target_peer_info.addr.unwrap()).await?;
 
-    let node = Node::from(config);
-
-    let handshake = node.create_handshake();
+    let node = Node::from(config.clone());
+    let target_peer_info = config.target_peer_info.clone();
+    let handshake = node.create_handshake(target_peer_info.clone());
     let peer_message = PeerMessage::Tier2Handshake(handshake);
     println!(">>> SEND HANDSHAKE {peer_message:#?}");
 
@@ -27,7 +27,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     println!("<<< RECEIVE HANDSHAKE {:#?}", peer_message);
 
-    let ping = node.create_ping();
+    let ping = node.create_ping(target_peer_info.clone());
     let peer_message = PeerMessage::Routed(ping.into());
     println!(">>> SEND PING {peer_message:#?}");
 
