@@ -10,19 +10,19 @@ use crate::proto;
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Handshake {
     /// Current protocol version.
-    pub(crate) protocol_version: u32,
+    pub protocol_version: u32,
     /// Oldest supported protocol version.
-    pub(crate) oldest_supported_version: u32,
+    pub oldest_supported_version: u32,
     /// Sender's peer id.
-    pub(crate) sender_peer_id: PeerId,
+    pub sender_peer_id: PeerId,
     /// Receiver's peer id.
-    pub(crate) target_peer_id: PeerId,
+    pub target_peer_id: PeerId,
     /// Sender's listening addr.
-    pub(crate) sender_listen_port: Option<u16>,
+    pub sender_listen_port: Option<u16>,
     /// Peer's chain information.
-    pub(crate) sender_chain_info: PeerChainInfoV2,
+    pub sender_chain_info: PeerChainInfoV2,
     /// Represents new `edge`. Contains only `nonce` and `Signature` from the sender.
-    pub(crate) partial_edge_info: PartialEdgeInfo,
+    pub partial_edge_info: PartialEdgeInfo,
 }
 
 impl From<Handshake> for proto::network::Handshake {

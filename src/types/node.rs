@@ -1,11 +1,7 @@
-use std::str::FromStr;
-
 use ed25519_dalek::Keypair;
 use near_crypto::{ED25519PublicKey, ED25519SecretKey, PublicKey, SecretKey};
 use near_network_primitives::time;
-use near_network_primitives::types::{AccountOrPeerIdOrHash, PartialEdgeInfo, PeerChainInfoV2, PeerInfo, Ping, RawRoutedMessage, RoutedMessageBody, RoutedMessageV2};
-use near_primitives::block::GenesisId;
-use near_primitives::hash::CryptoHash;
+use near_network_primitives::types::{AccountOrPeerIdOrHash, Edge, PartialEdgeInfo, PeerChainInfoV2, Ping, Pong, RawRoutedMessage, RoutedMessageBody, RoutedMessageV2};
 use near_primitives::network::PeerId;
 use rand::rngs::OsRng;
 
@@ -18,6 +14,7 @@ pub struct Node {
     protocol_version: u32,
     oldest_supported_version: u32,
     sender_listen_port: u16,
+    peer_chain_info: PeerChainInfoV2,
 }
 
 
@@ -28,6 +25,7 @@ impl From<Config> for Node {
             protocol_version: value.protocol_version,
             oldest_supported_version: value.oldest_supported_version,
             sender_listen_port: value.sender_listen_port,
+            peer_chain_info: value.network.into(),
         }
     }
 }
@@ -46,51 +44,93 @@ impl Node {
     pub fn secret_key(&self) -> SecretKey {
         SecretKey::ED25519(ED25519SecretKey(self.as_ref().to_bytes()))
     }
-    pub fn create_handshake(&self, target_peer_info: PeerInfo) -> Handshake {
+    pub fn create_handshake(&self, target_peer_id: PeerId, nonce: u64) -> Handshake {
         let sender_peer_id = self.peer_id();
         let sender_secret_key = self.secret_key();
-        let target_peer_id = target_peer_info.id.clone();
-        let genesis_hash: CryptoHash =
-            CryptoHash::from_str("GyGacsMkHfq1n1HQ3mHF4xXqAMTDR183FnckCaZ2r5yL").unwrap();
-        let genesis_id: GenesisId = GenesisId {
-            chain_id: "localnet".to_string(),
-            hash: genesis_hash,
-        };
 
+        let (peer0, peer1) = Edge::make_key(sender_peer_id.clone(), target_peer_id.clone());
+
+        let partial_edge_info = PartialEdgeInfo::new(
+            &peer0,
+            &peer1,
+            nonce,
+            &sender_secret_key,
+        );
         Handshake {
             protocol_version: self.protocol_version,
             oldest_supported_version: self.oldest_supported_version,
-            sender_peer_id: sender_peer_id.clone(),
-            target_peer_id: target_peer_id.clone(),
+            sender_peer_id,
+            target_peer_id,
             sender_listen_port: self.sender_listen_port.into(),
-            sender_chain_info: PeerChainInfoV2 {
-                genesis_id,
-                height: 0,
-                tracked_shards: vec![],
-                archival: false,
-            },
-            partial_edge_info: PartialEdgeInfo::new(
-                &sender_peer_id,
-                &target_peer_id,
-                1,
-                &sender_secret_key,
-            ),
+            sender_chain_info: self.peer_chain_info.clone(),
+            partial_edge_info,
         }
     }
 
-    pub fn create_ping(&self, target_peer_info: PeerInfo) -> RoutedMessageV2 {
+    pub fn verify_handshake(&self, target_handshake: &Handshake) -> bool {
+        if target_handshake.protocol_version < self.protocol_version {
+            println!("WRONG PROTOCOL VERSION");
+            return false;
+        };
+        if target_handshake.oldest_supported_version < self.oldest_supported_version {
+            println!("WRONG OLDEST SUPPORTED PROTOCOL VERSION");
+            return false;
+        };
+        if target_handshake.target_peer_id != self.peer_id() {
+            println!("WRONG TARGET PEER ID");
+            return false;
+        };
+
+        if target_handshake.sender_chain_info.genesis_id != self.peer_chain_info.genesis_id {
+            println!("WRONG PEER GENESIS ID");
+            return false;
+        };
+        let (sender_peer_id, target_peer_id) = Edge::make_key(
+            target_handshake.sender_peer_id.clone(),
+            target_handshake.target_peer_id.clone(),
+        );
+        let edge_data = Edge::build_hash(
+            &sender_peer_id,
+            &target_peer_id,
+            target_handshake.partial_edge_info.nonce,
+        );
+        target_handshake.partial_edge_info.signature.verify(
+            edge_data.as_ref(),
+            target_handshake.sender_peer_id.public_key(),
+        )
+    }
+
+    pub fn create_ping(&self, target_peer_id: PeerId) -> RoutedMessageV2 {
         let routed_message_body = RoutedMessageBody::Ping(Ping {
             nonce: 3,
             source: self.peer_id(),
         });
 
         let raw_routed_message = RawRoutedMessage {
-            target: AccountOrPeerIdOrHash::PeerId(target_peer_info.id.clone()),
+            target: AccountOrPeerIdOrHash::PeerId(target_peer_id),
             body: routed_message_body,
         };
 
         let routed_message = raw_routed_message.sign(
-            &self.secret_key(), 3, Some(time::Utc::now_utc()),
+            &self.secret_key(), 100, Some(time::Utc::now_utc()),
+        );
+
+        routed_message
+    }
+
+    pub fn create_pong(&self, target_peer_id: PeerId, nonce: u64) -> RoutedMessageV2 {
+        let routed_message_body = RoutedMessageBody::Pong(Pong {
+            nonce: nonce + 2,
+            source: self.peer_id(),
+        });
+
+        let raw_routed_message = RawRoutedMessage {
+            target: AccountOrPeerIdOrHash::PeerId(target_peer_id),
+            body: routed_message_body,
+        };
+
+        let routed_message = raw_routed_message.sign(
+            &self.secret_key(), 100, Some(time::Utc::now_utc()),
         );
 
         routed_message
