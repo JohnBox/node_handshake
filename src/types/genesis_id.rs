@@ -41,7 +41,7 @@ mod tests {
         let genesis_id = GenesisId {
             chain_id: "testnet".to_string(),
             hash: CryptoHash::try_from_slice(
-                ed25519_dalek::SecretKey::generate(&mut OsRng).as_bytes()
+                ed25519_dalek::SecretKey::generate(&mut OsRng).as_bytes(),
             )?,
         };
         let genesis_id_original = genesis_id.clone();

@@ -24,9 +24,7 @@ impl TryFrom<proto::network::PeerChainInfo> for PeerChainInfoV2 {
     fn try_from(value: proto::network::PeerChainInfo) -> Result<Self, Self::Error> {
         let genesis_id = GenesisId {
             chain_id: value.genesis_id.chain_id.clone(),
-            hash: CryptoHash::try_from_slice(
-                value.genesis_id.hash.hash.as_slice()
-            )?,
+            hash: CryptoHash::try_from_slice(value.genesis_id.hash.hash.as_slice())?,
         };
         Ok(Self {
             genesis_id,
@@ -53,7 +51,7 @@ mod tests {
         let genesis_id = GenesisId {
             chain_id: "testnet".to_string(),
             hash: CryptoHash::try_from_slice(
-                ed25519_dalek::SecretKey::generate(&mut OsRng).as_bytes()
+                ed25519_dalek::SecretKey::generate(&mut OsRng).as_bytes(),
             )?,
         };
         let peer_chain_info = PeerChainInfoV2 {

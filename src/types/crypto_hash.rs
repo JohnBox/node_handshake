@@ -31,9 +31,8 @@ mod tests {
 
     #[test]
     fn test_serde() -> Result<()> {
-        let crypto_hash = CryptoHash::try_from_slice(
-            ed25519_dalek::SecretKey::generate(&mut OsRng).as_bytes()
-        )?;
+        let crypto_hash =
+            CryptoHash::try_from_slice(ed25519_dalek::SecretKey::generate(&mut OsRng).as_bytes())?;
 
         let crypto_hash_original = crypto_hash.clone();
         let network_crypto_hash: network::CryptoHash = crypto_hash.into();

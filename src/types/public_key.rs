@@ -30,8 +30,8 @@ mod tests {
     #[test]
     fn test_serde() -> std::io::Result<()> {
         let pk = PublicKey::ED25519(ED25519PublicKey::from(
-            ed25519_dalek::SecretKey::generate(&mut OsRng).to_bytes())
-        );
+            ed25519_dalek::SecretKey::generate(&mut OsRng).to_bytes(),
+        ));
         let pk_original = pk.clone();
         let proto_pk: network::PublicKey = pk.into();
         let pk_restored: PublicKey = proto_pk.try_into()?;

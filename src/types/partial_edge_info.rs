@@ -34,19 +34,20 @@ mod tests {
     fn test_serde() -> Result<()> {
         let keypair = ed25519_dalek::Keypair::generate(&mut OsRng);
         let sender_peer_id = PeerId::new(PublicKey::ED25519(ED25519PublicKey(
-            keypair.public.to_bytes()
-        ))
-        );
+            keypair.public.to_bytes(),
+        )));
         let target_peer_id = PeerId::new(PublicKey::ED25519(ED25519PublicKey(
-            ed25519_dalek::Keypair::generate(&mut OsRng).public.to_bytes())
-        ));
+            ed25519_dalek::Keypair::generate(&mut OsRng)
+                .public
+                .to_bytes(),
+        )));
         let secret_key = SecretKey::ED25519(ED25519SecretKey(keypair.to_bytes()));
-        let partial_edge_info = PartialEdgeInfo::new(
-            &sender_peer_id, &target_peer_id, 1, &secret_key,
-        );
+        let partial_edge_info =
+            PartialEdgeInfo::new(&sender_peer_id, &target_peer_id, 1, &secret_key);
         let partial_edge_info_original = partial_edge_info.clone();
         let network_partial_edge_info: network::PartialEdgeInfo = partial_edge_info.into();
-        let partial_edge_info_restored: PartialEdgeInfo = network_partial_edge_info.try_into().unwrap();
+        let partial_edge_info_restored: PartialEdgeInfo =
+            network_partial_edge_info.try_into().unwrap();
         assert_eq!(partial_edge_info_original, partial_edge_info_restored);
 
         Ok(())

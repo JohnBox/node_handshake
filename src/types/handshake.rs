@@ -61,14 +61,16 @@ impl TryFrom<proto::network::Handshake> for Handshake {
                 genesis_id: GenesisId {
                     chain_id: value.sender_chain_info.genesis_id.chain_id.clone(),
                     hash: CryptoHash::try_from_slice(
-                        value.sender_chain_info.genesis_id.hash.hash.as_slice()
+                        value.sender_chain_info.genesis_id.hash.hash.as_slice(),
                     )?,
                 },
                 height: value.sender_chain_info.height,
                 tracked_shards: value.sender_chain_info.tracked_shards.clone(),
                 archival: value.sender_chain_info.archival,
             },
-            partial_edge_info: PartialEdgeInfo::try_from_slice(value.partial_edge_info.borsh.as_slice())?,
+            partial_edge_info: PartialEdgeInfo::try_from_slice(
+                value.partial_edge_info.borsh.as_slice(),
+            )?,
         })
     }
 }
@@ -92,7 +94,7 @@ mod tests {
         let genesis_id = GenesisId {
             chain_id: "testnet".to_string(),
             hash: CryptoHash::try_from_slice(
-                ed25519_dalek::SecretKey::generate(&mut OsRng).as_bytes()
+                ed25519_dalek::SecretKey::generate(&mut OsRng).as_bytes(),
             )?,
         };
         let sender_chain_info = PeerChainInfoV2 {
@@ -103,16 +105,16 @@ mod tests {
         };
         let keypair = ed25519_dalek::Keypair::generate(&mut OsRng);
         let sender_peer_id = PeerId::new(PublicKey::ED25519(ED25519PublicKey(
-            keypair.public.to_bytes()
-        ))
-        );
+            keypair.public.to_bytes(),
+        )));
         let target_peer_id = PeerId::new(PublicKey::ED25519(ED25519PublicKey(
-            ed25519_dalek::Keypair::generate(&mut OsRng).public.to_bytes())
-        ));
+            ed25519_dalek::Keypair::generate(&mut OsRng)
+                .public
+                .to_bytes(),
+        )));
         let secret_key = SecretKey::ED25519(ED25519SecretKey(keypair.to_bytes()));
-        let partial_edge_info = PartialEdgeInfo::new(
-            &sender_peer_id, &target_peer_id, 1, &secret_key,
-        );
+        let partial_edge_info =
+            PartialEdgeInfo::new(&sender_peer_id, &target_peer_id, 1, &secret_key);
         let handshake = Handshake {
             protocol_version: 63,
             oldest_supported_version: 61,
@@ -122,7 +124,6 @@ mod tests {
             sender_chain_info,
             partial_edge_info,
         };
-
 
         let handshake_original = handshake.clone();
         let network_handshake: network::Handshake = handshake.into();

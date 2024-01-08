@@ -278,15 +278,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "771fe0050b883fcc3ea2359b1a96bcfbc090b7116eae7c3c512c7a083fdf23d3"
 
 [[package]]
-name = "bs58"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5353f36341f7451062466f0b755b96ac3a9547e4d7f6b70d603fc721a7d7896"
-dependencies = [
- "tinyvec",
-]
-
-[[package]]
 name = "bumpalo"
 version = "3.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -836,7 +827,7 @@ dependencies = [
  "arrayref",
  "blake2",
  "borsh 0.9.3",
- "bs58 0.4.0",
+ "bs58",
  "c2-chacha",
  "curve25519-dalek",
  "derive_more",
@@ -912,7 +903,7 @@ checksum = "7929e19d862221949734c4a0063a8f55e7069de3a2ebc2d4f4c13497a5e953cb"
 dependencies = [
  "base64",
  "borsh 0.9.3",
- "bs58 0.4.0",
+ "bs58",
  "derive_more",
  "near-account-id",
  "num-rational",
@@ -962,21 +953,16 @@ name = "node_handshake"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "borsh 1.2.1",
- "bs58 0.5.0",
  "bytes",
  "clap",
  "ed25519-dalek",
- "hex",
  "near-crypto",
  "near-network-primitives",
  "near-primitives",
  "protobuf",
  "protobuf-codegen",
  "rand 0.7.3",
- "sha256",
- "thiserror",
  "tokio",
 ]
 
@@ -1475,19 +1461,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sha256"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7895c8ae88588ccead14ff438b939b0c569cd619116f14b4d13fdff7b8333386"
-dependencies = [
- "async-trait",
- "bytes",
- "hex",
- "sha2 0.10.8",
- "tokio",
-]
-
-[[package]]
 name = "signal-hook-registry"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1650,21 +1623,6 @@ name = "time-core"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef927ca75afb808a4d64dd374f00a2adf8d0fcff8e7b184af886c3c87ec4a3f3"
-
-[[package]]
-name = "tinyvec"
-version = "1.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87cc5ceb3875bb20c2890005a4e226a4651264a5c75edb2421b52861a0a0cb50"
-dependencies = [
- "tinyvec_macros",
-]
-
-[[package]]
-name = "tinyvec_macros"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"

@@ -27,8 +27,8 @@ mod tests {
     #[test]
     fn test_serde() -> std::io::Result<()> {
         let peer_id = PeerId::new(PublicKey::ED25519(ED25519PublicKey::from(
-            ed25519_dalek::SecretKey::generate(&mut OsRng).to_bytes())
-        ));
+            ed25519_dalek::SecretKey::generate(&mut OsRng).to_bytes(),
+        )));
         let peer_id_original = peer_id.clone();
         let network_peer_id: network::PublicKey = peer_id.into();
         let peer_id_restored: PeerId = network_peer_id.try_into()?;

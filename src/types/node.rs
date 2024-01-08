@@ -1,7 +1,10 @@
 use ed25519_dalek::Keypair;
 use near_crypto::{ED25519PublicKey, ED25519SecretKey, PublicKey, SecretKey};
 use near_network_primitives::time;
-use near_network_primitives::types::{AccountOrPeerIdOrHash, Edge, PartialEdgeInfo, PeerChainInfoV2, Ping, Pong, RawRoutedMessage, RoutedMessageBody, RoutedMessageV2};
+use near_network_primitives::types::{
+    AccountOrPeerIdOrHash, Edge, PartialEdgeInfo, PeerChainInfoV2, Ping, Pong, RawRoutedMessage,
+    RoutedMessageBody, RoutedMessageV2,
+};
 use near_primitives::network::PeerId;
 use rand::rngs::OsRng;
 
@@ -16,7 +19,6 @@ pub struct Node {
     sender_listen_port: u16,
     peer_chain_info: PeerChainInfoV2,
 }
-
 
 impl From<Config> for Node {
     fn from(value: Config) -> Self {
@@ -38,7 +40,9 @@ impl AsRef<Keypair> for Node {
 
 impl Node {
     pub fn peer_id(&self) -> PeerId {
-        PeerId::new(PublicKey::ED25519(ED25519PublicKey(self.as_ref().public.to_bytes())))
+        PeerId::new(PublicKey::ED25519(ED25519PublicKey(
+            self.as_ref().public.to_bytes(),
+        )))
     }
 
     pub fn secret_key(&self) -> SecretKey {
@@ -50,12 +54,7 @@ impl Node {
 
         let (peer0, peer1) = Edge::make_key(sender_peer_id.clone(), target_peer_id.clone());
 
-        let partial_edge_info = PartialEdgeInfo::new(
-            &peer0,
-            &peer1,
-            nonce,
-            &sender_secret_key,
-        );
+        let partial_edge_info = PartialEdgeInfo::new(&peer0, &peer1, nonce, &sender_secret_key);
         Handshake {
             protocol_version: self.protocol_version,
             oldest_supported_version: self.oldest_supported_version,
@@ -69,22 +68,23 @@ impl Node {
 
     pub fn verify_handshake(&self, target_handshake: &Handshake) -> bool {
         if target_handshake.protocol_version < self.protocol_version {
-            println!("WRONG PROTOCOL VERSION");
+            println!("Wrong protocol version");
             return false;
         };
         if target_handshake.oldest_supported_version < self.oldest_supported_version {
-            println!("WRONG OLDEST SUPPORTED PROTOCOL VERSION");
+            println!("Wrong oldest supported protocol version");
             return false;
         };
         if target_handshake.target_peer_id != self.peer_id() {
-            println!("WRONG TARGET PEER ID");
+            println!("Wrong target peer id");
             return false;
         };
 
         if target_handshake.sender_chain_info.genesis_id != self.peer_chain_info.genesis_id {
-            println!("WRONG PEER GENESIS ID");
+            println!("Wrong peer genesis id");
             return false;
         };
+
         let (sender_peer_id, target_peer_id) = Edge::make_key(
             target_handshake.sender_peer_id.clone(),
             target_handshake.target_peer_id.clone(),
@@ -94,10 +94,16 @@ impl Node {
             &target_peer_id,
             target_handshake.partial_edge_info.nonce,
         );
-        target_handshake.partial_edge_info.signature.verify(
+
+        if !target_handshake.partial_edge_info.signature.verify(
             edge_data.as_ref(),
             target_handshake.sender_peer_id.public_key(),
-        )
+        ) {
+            println!("Wrong peer signature");
+            return false;
+        }
+
+        true
     }
 
     pub fn create_ping(&self, target_peer_id: PeerId) -> RoutedMessageV2 {
@@ -111,16 +117,15 @@ impl Node {
             body: routed_message_body,
         };
 
-        let routed_message = raw_routed_message.sign(
-            &self.secret_key(), 100, Some(time::Utc::now_utc()),
-        );
+        let routed_message =
+            raw_routed_message.sign(&self.secret_key(), 100, Some(time::Utc::now_utc()));
 
         routed_message
     }
 
     pub fn create_pong(&self, target_peer_id: PeerId, nonce: u64) -> RoutedMessageV2 {
         let routed_message_body = RoutedMessageBody::Pong(Pong {
-            nonce: nonce + 2,
+            nonce,
             source: self.peer_id(),
         });
 
@@ -129,14 +134,12 @@ impl Node {
             body: routed_message_body,
         };
 
-        let routed_message = raw_routed_message.sign(
-            &self.secret_key(), 100, Some(time::Utc::now_utc()),
-        );
+        let routed_message =
+            raw_routed_message.sign(&self.secret_key(), 100, Some(time::Utc::now_utc()));
 
         routed_message
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -159,7 +162,7 @@ mod tests {
         let genesis_id = GenesisId {
             chain_id: "testnet".to_string(),
             hash: CryptoHash::try_from_slice(
-                ed25519_dalek::SecretKey::generate(&mut OsRng).as_bytes()
+                ed25519_dalek::SecretKey::generate(&mut OsRng).as_bytes(),
             )?,
         };
         let sender_chain_info = PeerChainInfoV2 {
@@ -169,34 +172,46 @@ mod tests {
             archival: false,
         };
 
-        let (target_node, sender_node) = (Node {
-            key_pair: Keypair::generate(&mut OsRng),
-            protocol_version: 0,
-            oldest_supported_version: 0,
-            sender_listen_port: 0,
-        }, Node {
-            key_pair: Keypair::generate(&mut OsRng),
-            protocol_version: 0,
-            oldest_supported_version: 0,
-            sender_listen_port: 0,
-        });
+        let (target_node, sender_node) = (
+            Node {
+                key_pair: Keypair::generate(&mut OsRng),
+                protocol_version: 0,
+                oldest_supported_version: 0,
+                sender_listen_port: 0,
+                peer_chain_info: sender_chain_info.clone(),
+            },
+            Node {
+                key_pair: Keypair::generate(&mut OsRng),
+                protocol_version: 0,
+                oldest_supported_version: 0,
+                sender_listen_port: 0,
+                peer_chain_info: sender_chain_info.clone(),
+            },
+        );
 
         let partial_edge_info = PartialEdgeInfo::new(
-            &PeerId::new(PublicKey::ED25519(ED25519PublicKey(sender_node.as_ref().public.to_bytes()))),
-            &PeerId::new(PublicKey::ED25519(ED25519PublicKey(target_node.as_ref().public.to_bytes()))),
+            &PeerId::new(PublicKey::ED25519(ED25519PublicKey(
+                sender_node.as_ref().public.to_bytes(),
+            ))),
+            &PeerId::new(PublicKey::ED25519(ED25519PublicKey(
+                target_node.as_ref().public.to_bytes(),
+            ))),
             1,
             &SecretKey::ED25519(ED25519SecretKey(sender_node.as_ref().to_bytes())),
         );
         let handshake = Handshake {
             protocol_version: 63,
             oldest_supported_version: 61,
-            sender_peer_id: PeerId::new(PublicKey::ED25519(ED25519PublicKey(sender_node.as_ref().public.to_bytes()))),
-            target_peer_id: PeerId::new(PublicKey::ED25519(ED25519PublicKey(target_node.as_ref().public.to_bytes()))),
+            sender_peer_id: PeerId::new(PublicKey::ED25519(ED25519PublicKey(
+                sender_node.as_ref().public.to_bytes(),
+            ))),
+            target_peer_id: PeerId::new(PublicKey::ED25519(ED25519PublicKey(
+                target_node.as_ref().public.to_bytes(),
+            ))),
             sender_listen_port: Some(51200),
             sender_chain_info,
             partial_edge_info,
         };
-
 
         let handshake_original = handshake.clone();
         let network_handshake: network::Handshake = handshake.into();
