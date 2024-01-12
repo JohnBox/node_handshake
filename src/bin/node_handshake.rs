@@ -107,15 +107,16 @@ async fn receive_handshake(
 }
 
 async fn send_handshake(node: Arc<Node>, config: Config) {
-    println!("Trying connect to {:?}", config.target_peer_info.addr);
+    let target_addr = config
+        .target_peer_info
+        .addr
+        .expect("Specify target peer info with ip address");
+    println!("Trying connect to {target_addr:?}");
 
-    let connection = tokio::time::timeout(
-        Duration::from_secs(1),
-        TcpStream::connect(config.target_peer_info.addr.unwrap()),
-    )
-    .await
-    .unwrap()
-    .unwrap();
+    let connection = tokio::time::timeout(Duration::from_secs(2), TcpStream::connect(target_addr))
+        .await
+        .expect("Timeout error")
+        .expect("Unable to connect");
 
     let handshake = node.create_handshake(config.target_peer_info.id.clone(), 1);
 
